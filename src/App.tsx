@@ -66,6 +66,43 @@ interface Course {
   updatedAt?: any;
 }
 
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 export default function App() {
   const [lang, setLang] = useState<Language>('ar');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -118,7 +155,7 @@ export default function App() {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
       setCourses(docs);
     }, (error) => {
-      console.error("Error fetching courses:", error);
+      handleFirestoreError(error, OperationType.LIST, "courses");
     });
 
     const configDoc = doc(db, "config", "main");
@@ -126,6 +163,8 @@ export default function App() {
       if (snap.exists()) {
         setSiteContent(snap.data());
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "config/main");
     });
 
     return () => {
@@ -154,11 +193,12 @@ export default function App() {
   const handleSaveGlobal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) return;
+    const path = "config/main";
     try {
       await updateDoc(doc(db, "config", "main"), siteContent);
       setIsEditingGlobal(false);
     } catch (error) {
-      console.error(error);
+      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
@@ -195,8 +235,10 @@ export default function App() {
     e.preventDefault();
     if (!isAdmin || uploading) return;
 
+    let path = "courses";
     try {
       if (editingCourse?.id) {
+        path = `courses/${editingCourse.id}`;
         const courseRef = doc(db, "courses", editingCourse.id);
         await updateDoc(courseRef, {
           ...formData,
@@ -223,17 +265,17 @@ export default function App() {
         duration: ''
       });
     } catch (error) {
-      console.error("Error saving course:", error);
-      alert("Failed to save course. Check console for details.");
+      handleFirestoreError(error, OperationType.WRITE, path);
     }
   };
 
   const handleDeleteCourse = async (id: string) => {
     if (!isAdmin || !window.confirm("Are you sure?")) return;
+    const path = `courses/${id}`;
     try {
       await deleteDoc(doc(db, "courses", id));
     } catch (error) {
-      console.error("Error deleting course:", error);
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 
@@ -248,15 +290,15 @@ export default function App() {
   const content = {
     ar: {
       name: "رحاب أحمد علي ياسين",
-      title: "استراتيجية تسويق رقمي | مديرة تدريب | مؤسسة أكاديمية CFBL",
+      title: "استراتيجية تسويق رقمي | مديرة تدريب | مؤسسة رحاب كمبنى و CFBL Academy",
       aboutTitle: "من هي رحاب أحمد علي؟",
       aboutText: "رحاب أحمد علي ياسين هي واحدة من الأسماء الصاعدة بقوة في مجال التسويق الإلكتروني والتدريب المهني في الوطن العربي، حيث تجمع بين الخبرة العملية، الرؤية التطويرية الحديثة، والقدرة على تحويل المعرفة إلى نتائج حقيقية قابلة للتطبيق داخل سوق العمل.",
       mission: "تؤمن رحاب بأن التدريب الحقيقي لا يعتمد فقط على نقل المعلومات، بل على بناء عقلية احترافية قادرة على التفكير، التحليل، التنفيذ، وصناعة الفرص.",
       visionTitle: "الرؤية المهنية",
       visionText: "تسعى رحاب إلى بناء نموذج تدريبي عربي حديث يربط بين التعليم الأكاديمي والتطبيق العملي، ويمنح المتدربين الخبرة الحقيقية التي يحتاجها سوق العمل في مجالات التسويق، إدارة الأعمال، وصناعة المحتوى.",
       roles: [
-        { title: "مؤسس ومالك أكاديمية CFBL", icon: <Award className="w-5 h-5" /> },
-        { title: "مديرة التدريب في أكاديمية زويل – فرع الجيزة", icon: <GraduationCap className="w-5 h-5" /> },
+        { title: "مؤسس ومالك رحاب كمبنى و CFBL Academy", icon: <Award className="w-5 h-5" /> },
+        { title: "مديرة التدريب في مؤسسة CFBL Academy", icon: <GraduationCap className="w-5 h-5" /> },
         { title: "أخصائية تسويق رقمي", icon: <Target className="w-5 h-5" /> },
         { title: "مدربة محترفة ومطورة برامج تعليمية", icon: <Users className="w-5 h-5" /> },
         { title: "استشارية تسويق وصناعة محتوى", icon: <Lightbulb className="w-5 h-5" /> },
@@ -295,15 +337,15 @@ export default function App() {
     },
     en: {
       name: "Rehab Ahmed Ali Yassein",
-      title: "Digital Marketing Strategist | Training Manager | Founder of CFBL Academy",
+      title: "Digital Marketing Strategist | Training Manager | Founder of Rehab Company & CFBL Academy",
       aboutTitle: "Who is Rehab Ahmed Ali?",
       aboutText: "Rehab Ahmed Ali Yassein is a leading name in Digital Marketing and Professional Training in the Arab world, blending practical experience with modern visionary development to transform knowledge into real results.",
       mission: "Rehab believes that true training isn't just about transferring information, but about building a professional mindset capable of thinking, analyzing, and execution.",
       visionTitle: "Professional Vision",
       visionText: "She strives to build a modern Arabic training model that bridges academic education and practical application, providing students with real-world experience needed in marketing and business.",
       roles: [
-        { title: "Founder & Owner of CFBL Academy", icon: <Award className="w-5 h-5" /> },
-        { title: "Training Manager at Zewail Academy", icon: <GraduationCap className="w-5 h-5" /> },
+        { title: "Founder & Owner of Rehab Company & CFBL Academy", icon: <Award className="w-5 h-5" /> },
+        { title: "Training Manager at CFBL Academy", icon: <GraduationCap className="w-5 h-5" /> },
         { title: "Digital Marketing Specialist", icon: <Target className="w-5 h-5" /> },
         { title: "Professional Trainer & Developer", icon: <Users className="w-5 h-5" /> },
         { title: "Marketing & Content Consultant", icon: <Lightbulb className="w-5 h-5" /> },
@@ -345,10 +387,10 @@ export default function App() {
   const current = content[lang];
   const display = {
     ...current,
-    name: siteContent?.[`heroName${lang.toUpperCase()}`] || current.name,
-    title: siteContent?.[`heroTitle${lang.toUpperCase()}`] || current.title,
-    aboutText: siteContent?.[`aboutText${lang.toUpperCase()}`] || current.aboutText,
-    visionText: siteContent?.[`visionText${lang.toUpperCase()}`] || current.visionText,
+    name: siteContent?.[`heroName${lang === 'ar' ? 'Ar' : 'En'}`] || current.name,
+    title: siteContent?.[`heroTitle${lang === 'ar' ? 'Ar' : 'En'}`] || current.title,
+    aboutText: siteContent?.[`aboutText${lang === 'ar' ? 'Ar' : 'En'}`] || current.aboutText,
+    visionText: siteContent?.[`visionText${lang === 'ar' ? 'Ar' : 'En'}`] || current.visionText,
   };
 
   return (
@@ -417,6 +459,96 @@ export default function App() {
           </button>
         </div>
       </nav>
+
+      {/* Mobile Menu Sidebar */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <div className="fixed inset-0 z-[60] md:hidden">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMenuOpen(false)}
+              className="absolute inset-0 bg-natural-text/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ x: isRTL ? '100%' : '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: isRTL ? '100%' : '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className={`absolute inset-y-0 ${isRTL ? 'right-0' : 'left-0'} w-72 bg-natural-sage text-white shadow-2xl flex flex-col`}
+            >
+              <div className="p-8 border-b border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-white text-natural-sage flex items-center justify-center rounded-full font-bold text-lg">R</div>
+                  <span className="text-xs font-bold tracking-widest uppercase">Menu</span>
+                </div>
+                <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                <div className="flex flex-col gap-4">
+                  <button 
+                    onClick={() => { toggleLang(); setIsMenuOpen(false); }}
+                    className="flex items-center gap-3 text-xs font-bold tracking-widest uppercase text-white/70 hover:text-white transition-colors"
+                  >
+                    <Globe className="w-4 h-4" />
+                    {lang === 'ar' ? 'English' : 'العربية'}
+                  </button>
+                  
+                  {user && (
+                    <button 
+                      onClick={() => { logout(); setIsMenuOpen(false); }}
+                      className="flex items-center gap-3 text-xs font-bold tracking-widest uppercase text-white/70 hover:text-red-300 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      {isRTL ? 'خروج' : 'Logout'}
+                    </button>
+                  )}
+                  
+                  {!user && (
+                    <button 
+                      onClick={() => { setIsAuthModalOpen(true); setIsMenuOpen(false); }}
+                      className="flex items-center gap-3 text-xs font-bold tracking-widest uppercase text-white/70 hover:text-white transition-colors"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      {isRTL ? 'دخول' : 'Login'}
+                    </button>
+                  )}
+                </div>
+
+                <nav className="flex flex-col gap-6 pt-8 border-t border-white/10">
+                  {[
+                    { label: isRTL ? 'من هي رحاب؟' : 'Who is Rehab?', href: '#' },
+                    { label: isRTL ? 'الخبرات' : 'Expertise', href: '#' },
+                    { label: isRTL ? 'الدورات' : 'Courses', href: '#' },
+                    { label: isRTL ? 'تواصل معي' : 'Contact', href: '#contact' }
+                  ].map((link, i) => (
+                    <a 
+                      key={i} 
+                      href={link.href} 
+                      onClick={() => setIsMenuOpen(false)}
+                      className="text-lg font-bold hover:translate-x-2 transition-transform"
+                    >
+                      {link.label}
+                    </a>
+                  ))}
+                </nav>
+              </div>
+
+              <div className="p-8 bg-black/20 text-center">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-4">Follow Me</p>
+                <div className="flex justify-center gap-6">
+                   <a href="https://www.linkedin.com/in/rehab-ahmed-ali-674387232" className="text-white/70 hover:text-white transition-colors"><Linkedin className="w-4 h-4" /></a>
+                   <a href="https://www.facebook.com/share/1FkaGiCwcS/" className="text-white/70 hover:text-white transition-colors"><Facebook className="w-5 h-5" /></a>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Hero Section */}
       <section className="pt-20 border-b border-natural-border">
@@ -504,6 +636,49 @@ export default function App() {
                 </h3>
               </motion.div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* About Section */}
+      <section className="py-24 px-6 bg-white overflow-hidden">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
+            <motion.div
+              initial={{ opacity: 0, x: isRTL ? 50 : -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="space-y-8"
+            >
+              <div className="space-y-4">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-natural-sage">Explore</span>
+                <h2 className={`text-5xl md:text-6xl font-bold text-natural-text leading-tight ${isRTL ? 'font-arabic' : 'font-display'}`}>
+                  {isRTL ? display.aboutTitle : display.aboutTitle}
+                </h2>
+              </div>
+              <p className="text-xl text-natural-muted font-light leading-relaxed">
+                {display.aboutText}
+              </p>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              className="relative"
+            >
+              <div className="aspect-[4/5] bg-natural-light rounded-[60px] overflow-hidden relative z-10 group">
+                <img 
+                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=1976&auto=format&fit=crop" 
+                  alt="Rehab Ahmed Ali" 
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-natural-sage/10 mix-blend-multiply transition-opacity group-hover:opacity-0" />
+              </div>
+              {/* Decorative elements */}
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-natural-light rounded-full -z-10 animate-pulse" />
+              <div className="absolute -bottom-10 -left-10 w-60 h-60 border-2 border-natural-border rounded-full -z-10" />
+            </motion.div>
           </div>
         </div>
       </section>
@@ -797,16 +972,16 @@ export default function App() {
                     <div className="space-y-2">
                        <label className="text-[10px] font-bold text-natural-muted uppercase px-2">Name (use &lt;br/&gt; for line break)</label>
                        <input 
-                        value={siteContent?.heroNameAR || ''} 
-                        onChange={e => setSiteContent({...siteContent, heroNameAR: e.target.value})}
+                        value={siteContent?.heroNameAr || ''} 
+                        onChange={e => setSiteContent({...siteContent, heroNameAr: e.target.value})}
                         className="w-full px-4 py-3 bg-natural-light rounded-xl border border-natural-border outline-none focus:ring-2 focus:ring-natural-sage" 
                       />
                     </div>
                     <div className="space-y-2">
                        <label className="text-[10px] font-bold text-natural-muted uppercase px-2">Professional Title</label>
                        <input 
-                        value={siteContent?.heroTitleAR || ''} 
-                        onChange={e => setSiteContent({...siteContent, heroTitleAR: e.target.value})}
+                        value={siteContent?.heroTitleAr || ''} 
+                        onChange={e => setSiteContent({...siteContent, heroTitleAr: e.target.value})}
                         className="w-full px-4 py-3 bg-natural-light rounded-xl border border-natural-border outline-none focus:ring-2 focus:ring-natural-sage" 
                       />
                     </div>
@@ -816,16 +991,43 @@ export default function App() {
                     <div className="space-y-2">
                        <label className="text-[10px] font-bold text-natural-muted uppercase px-2">Name</label>
                        <input 
-                        value={siteContent?.heroNameEN || ''} 
-                        onChange={e => setSiteContent({...siteContent, heroNameEN: e.target.value})}
+                        value={siteContent?.heroNameEn || ''} 
+                        onChange={e => setSiteContent({...siteContent, heroNameEn: e.target.value})}
                         className="w-full px-4 py-3 bg-natural-light rounded-xl border border-natural-border outline-none focus:ring-2 focus:ring-natural-sage" 
                       />
                     </div>
                     <div className="space-y-2">
                        <label className="text-[10px] font-bold text-natural-muted uppercase px-2">Professional Title</label>
                        <input 
-                        value={siteContent?.heroTitleEN || ''} 
-                        onChange={e => setSiteContent({...siteContent, heroTitleEN: e.target.value})}
+                        value={siteContent?.heroTitleEn || ''} 
+                        onChange={e => setSiteContent({...siteContent, heroTitleEn: e.target.value})}
+                        className="w-full px-4 py-3 bg-natural-light rounded-xl border border-natural-border outline-none focus:ring-2 focus:ring-natural-sage" 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-natural-muted border-b border-natural-border pb-2">About Section (Arabic)</h3>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-bold text-natural-muted uppercase px-2">About Text</label>
+                       <textarea 
+                        rows={6}
+                        value={siteContent?.aboutTextAr || ''} 
+                        onChange={e => setSiteContent({...siteContent, aboutTextAr: e.target.value})}
+                        className="w-full px-4 py-3 bg-natural-light rounded-xl border border-natural-border outline-none focus:ring-2 focus:ring-natural-sage" 
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-natural-muted border-b border-natural-border pb-2">About Section (English)</h3>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-bold text-natural-muted uppercase px-2">About Text</label>
+                       <textarea 
+                        rows={6}
+                        value={siteContent?.aboutTextEn || ''} 
+                        onChange={e => setSiteContent({...siteContent, aboutTextEn: e.target.value})}
                         className="w-full px-4 py-3 bg-natural-light rounded-xl border border-natural-border outline-none focus:ring-2 focus:ring-natural-sage" 
                       />
                     </div>
@@ -839,8 +1041,8 @@ export default function App() {
                        <label className="text-[10px] font-bold text-natural-muted uppercase px-2">Vision Text</label>
                        <textarea 
                         rows={4}
-                        value={siteContent?.visionTextAR || ''} 
-                        onChange={e => setSiteContent({...siteContent, visionTextAR: e.target.value})}
+                        value={siteContent?.visionTextAr || ''} 
+                        onChange={e => setSiteContent({...siteContent, visionTextAr: e.target.value})}
                         className="w-full px-4 py-3 bg-natural-light rounded-xl border border-natural-border outline-none focus:ring-2 focus:ring-natural-sage" 
                       />
                     </div>
@@ -851,8 +1053,8 @@ export default function App() {
                        <label className="text-[10px] font-bold text-natural-muted uppercase px-2">Vision Text</label>
                        <textarea 
                         rows={4}
-                        value={siteContent?.visionTextEN || ''} 
-                        onChange={e => setSiteContent({...siteContent, visionTextEN: e.target.value})}
+                        value={siteContent?.visionTextEn || ''} 
+                        onChange={e => setSiteContent({...siteContent, visionTextEn: e.target.value})}
                         className="w-full px-4 py-3 bg-natural-light rounded-xl border border-natural-border outline-none focus:ring-2 focus:ring-natural-sage" 
                       />
                     </div>
@@ -1054,14 +1256,14 @@ export default function App() {
             <div className="flex items-center gap-6">
               <div className="text-right">
                 <p className="text-[10px] text-natural-muted font-bold uppercase tracking-widest mb-1">Training Manager</p>
-                <p className="text-sm font-bold">Zewail Academy - Giza Branch</p>
+                <p className="text-sm font-bold">Rehab Company & CFBL Academy</p>
               </div>
               <div className="w-[1px] h-10 bg-natural-border"></div>
               <div className="flex gap-4">
-                <a href="#" className="p-2 text-natural-muted hover:text-natural-sage transition-colors">
+                <a href="https://www.linkedin.com/in/rehab-ahmed-ali-674387232?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" rel="noopener noreferrer" className="p-2 text-natural-muted hover:text-natural-sage transition-colors">
                   <Linkedin className="w-5 h-5" />
                 </a>
-                <a href="#" className="p-2 text-natural-muted hover:text-natural-sage transition-colors">
+                <a href="https://www.facebook.com/share/1FkaGiCwcS/" target="_blank" rel="noopener noreferrer" className="p-2 text-natural-muted hover:text-natural-sage transition-colors">
                   <Facebook className="w-5 h-5" />
                 </a>
                 <a href="#" className="p-2 text-natural-muted hover:text-natural-sage transition-colors">

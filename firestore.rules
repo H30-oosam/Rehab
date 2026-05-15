@@ -44,6 +44,18 @@ service cloud.firestore {
              data.updatedAt is timestamp;
     }
 
+    // SiteContent Validation
+    function isValidConfig(data) {
+      return (!('heroNameAr' in data) || data.heroNameAr is string) &&
+             (!('heroNameEn' in data) || data.heroNameEn is string) &&
+             (!('heroTitleAr' in data) || data.heroTitleAr is string) &&
+             (!('heroTitleEn' in data) || data.heroTitleEn is string) &&
+             (!('aboutTextAr' in data) || data.aboutTextAr is string) &&
+             (!('aboutTextEn' in data) || data.aboutTextEn is string) &&
+             (!('visionTextAr' in data) || data.visionTextAr is string) &&
+             (!('visionTextEn' in data) || data.visionTextEn is string);
+    }
+
     match /courses/{courseId} {
       allow read: if true; // Publicly readable
       
@@ -63,7 +75,9 @@ service cloud.firestore {
 
     match /config/{configId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if isAdmin() && isValidConfig(incoming());
+      allow update: if isAdmin() && isValidConfig(incoming());
+      allow delete: if false;
     }
   }
 }

@@ -1,25 +1,55 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import path from "path";
+import helmet from "helmet";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Middlewares
+  // --- Professional Middlewares ---
+  
+  // Security headers (configured to allow Vite in dev)
+  app.use(helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === "production" ? undefined : false,
+    crossOriginEmbedderPolicy: false,
+  }));
+  
+  // Enable CORS
+  app.use(cors());
+  
+  // Request body parsing
   app.use(express.json());
+  
+  // Basic Logger
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} ${res.statusCode} - ${duration}ms`);
+    });
+    next();
+  });
 
   // --- API Routes ---
   
   // Health check endpoint
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  app.get("/api/health", (req: Request, res: Response) => {
+    res.json({ 
+      status: "online", 
+      version: "2.0.0",
+      timestamp: new Date().toISOString() 
+    });
   });
 
-  // Example API for server-side info (could be expanded for admin tasks)
-  app.get("/api/stats", (req, res) => {
+  // System Stats
+  app.get("/api/stats", (req: Request, res: Response) => {
     res.json({ 
-      version: "1.0.0",
+      platform: process.platform,
+      nodeVersion: process.version,
+      uptime: process.uptime(),
+      memoryUsage: process.memoryUsage(),
       environment: process.env.NODE_ENV || "development"
     });
   });
@@ -27,24 +57,34 @@ async function startServer() {
   // --- Vite / Static Files Middleware ---
 
   if (process.env.NODE_ENV !== "production") {
-    // Development mode: Use Vite's middleware for HMR and TS support
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    // Production mode: Serve static files from the dist folder
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*', (req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
+  // --- Global Error Handler ---
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    console.error("[Fatal Error]:", err);
+    res.status(500).json({ 
+      error: "Internal Server Error", 
+      message: process.env.NODE_ENV === "development" ? err.message : "Something went wrong on our end."
+    });
+  });
+
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Professional Server running at http://localhost:${PORT}`);
+    console.log(`🚀 Professional Pro-Level Server running at http://localhost:${PORT}`);
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
+});
