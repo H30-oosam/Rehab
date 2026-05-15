@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "Course": {
+      "title": "Course",
+      "description": "A professional course offered by Rehab Ahmed Ali",
+      "type": "object",
+      "properties": {
+        "titleAr": { "type": "string" },
+        "titleEn": { "type": "string" },
+        "descriptionAr": { "type": "string" },
+        "descriptionEn": { "type": "string" },
+        "price": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "category": { "type": "string" },
+        "duration": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["titleAr", "titleEn", "descriptionAr", "descriptionEn", "category"]
+    },
+    "SiteContent": {
+      "title": "Site Content",
+      "description": "Global strings and configuration for the website",
+      "type": "object",
+      "properties": {
+        "heroNameAr": { "type": "string" },
+        "heroNameEn": { "type": "string" },
+        "heroTitleAr": { "type": "string" },
+        "heroTitleEn": { "type": "string" },
+        "aboutTextAr": { "type": "string" },
+        "aboutTextEn": { "type": "string" },
+        "visionTextAr": { "type": "string" },
+        "visionTextEn": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/courses/{courseId}": {
+      "schema": "Course",
+      "description": "Collection of courses"
+    },
+    "/config/{configId}": {
+      "schema": "SiteContent",
+      "description": "Global configuration document"
+    }
+  }
+}

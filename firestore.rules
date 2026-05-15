@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+        (request.auth.token.email == 'hossamelwardany132@gmail.com' || 
+         request.auth.token.email == 'rhabfaceb9@gmail.com') &&
+        request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Course Validation
+    function isValidCourse(data) {
+      return data.titleAr is string && data.titleAr.size() <= 200 &&
+             data.titleEn is string && data.titleEn.size() <= 200 &&
+             data.descriptionAr is string && data.descriptionAr.size() <= 2000 &&
+             data.descriptionEn is string && data.descriptionEn.size() <= 2000 &&
+             data.category is string && data.category.size() <= 100 &&
+             (!('price' in data) || data.price is number) &&
+             (!('imageUrl' in data) || data.imageUrl is string) &&
+             (!('duration' in data) || data.duration is string) &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    match /courses/{courseId} {
+      allow read: if true; // Publicly readable
+      
+      allow create: if isAdmin() && 
+                      isValidId(courseId) && 
+                      isValidCourse(incoming()) &&
+                      incoming().createdAt == request.time &&
+                      incoming().updatedAt == request.time;
+                      
+      allow update: if isAdmin() && 
+                      isValidCourse(incoming()) &&
+                      incoming().updatedAt == request.time &&
+                      incoming().createdAt == existing().createdAt;
+                      
+      allow delete: if isAdmin();
+    }
+
+    match /config/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
